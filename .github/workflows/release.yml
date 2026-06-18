@@ -1,0 +1,97 @@
+name: Build & Release Firmware
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  # EDIT ME: must match the tag pushed by build-image.yml (same OWNER, lowercase)
+  BUILDER_IMAGE: ghcr.io/OWNER/escape32-builder:latest
+  # EDIT ME: your two release repos, as owner/name
+  PRIVATE_REPO: OWNER/remora-firmware-internal
+  PUBLIC_REPO: OWNER/remora-firmware
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute version
+        id: version
+        run: echo "version=$(date +%Y.%m.%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull builder image
+        run: docker pull "$BUILDER_IMAGE"
+
+      - name: Build firmware
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/workspace" "$BUILDER_IMAGE" make
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p release-assets
+          # EDIT ME: this glob assumes your Makefile leaves .bin/.hex somewhere
+          # under the repo (mirrors upstream's build/**/*.bin layout). Adjust
+          # to match wherever YOUR Makefile actually puts output.
+          find . -type f \( -name '*.bin' -o -name '*.hex' \) -exec cp {} release-assets/ \;
+          ls -la release-assets
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ steps.version.outputs.version }}
+          path: release-assets/*
+
+  publish-private:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ needs.build.outputs.version }}
+          path: release-assets
+
+      - name: Create private release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          gh release create "v${{ needs.build.outputs.version }}" release-assets/* \
+            --repo "$PRIVATE_REPO" \
+            --title "Firmware ${{ needs.build.outputs.version }}" \
+            --notes "Automated build from ${{ github.repository }}@${{ github.sha }}"
+
+  publish-public:
+    needs: build
+    runs-on: ubuntu-latest
+    # Requires manual approval: Settings -> Environments -> public-release ->
+    # add required reviewers. Nothing reaches the public repo without someone
+    # clicking approve on the run.
+    environment: public-release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ needs.build.outputs.version }}
+          path: release-assets
+
+      - name: Create public release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          gh release create "v${{ needs.build.outputs.version }}" release-assets/* \
+            --repo "$PUBLIC_REPO" \
+            --title "Firmware ${{ needs.build.outputs.version }}" \
+            --notes "Release ${{ needs.build.outputs.version }}"

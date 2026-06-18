@@ -7,10 +7,10 @@ on:
 
 env:
   # EDIT ME: must match the tag pushed by build-image.yml (same OWNER, lowercase)
-  BUILDER_IMAGE: ghcr.io/OWNER/escape32-builder:latest
+  BUILDER_IMAGE: ghcr.io/aartech-dev/escape32-builder:latest
   # EDIT ME: your two release repos, as owner/name
-  PRIVATE_REPO: OWNER/remora-firmware-internal
-  PUBLIC_REPO: OWNER/remora-firmware
+  PRIVATE_REPO: aartech-dev/remora-firmware-internal
+  PUBLIC_REPO: aartech-dev/remora-firmware
 
 permissions:
   contents: read
@@ -48,7 +48,7 @@ jobs:
           # EDIT ME: this glob assumes your Makefile leaves .bin/.hex somewhere
           # under the repo (mirrors upstream's build/**/*.bin layout). Adjust
           # to match wherever YOUR Makefile actually puts output.
-          find . -type f \( -name '*.bin' -o -name '*.hex' \) -exec cp {} release-assets/ \;
+          find . -type f \( -name 'build/**/*.bin' -o -name 'build/**/*.hex' -o -name 'build/**/*.elf'\) -exec cp {} release-assets/ \;
           ls -la release-assets
 
       - uses: actions/upload-artifact@v4

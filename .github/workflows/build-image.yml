@@ -37,6 +37,6 @@ jobs:
           context: ./docker
           push: true
           # EDIT ME: replace OWNER with your GitHub username/org, lowercase
-          tags: ghcr.io/OWNER/escape32-builder:latest
+          tags: ghcr.io/aartech-dev/escape32-builder:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

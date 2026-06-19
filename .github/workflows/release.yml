@@ -44,12 +44,16 @@ jobs:
 
       - name: Collect artifacts
         run: |
-          mkdir -p release-assets
+          mkdir -p release-assets-pri
+          mkdir -p release-assets-pub
           # EDIT ME: this glob assumes your Makefile leaves .bin/.hex somewhere
           # under the repo (mirrors upstream's build/**/*.bin layout). Adjust
           # to match wherever YOUR Makefile actually puts output.
-          find . -type f \( -name 'build/**/*.bin' -o -name 'build/**/*.hex' -o -name 'build/**/*.elf'\) -exec cp {} release-assets/ \;
-          ls -la release-assets
+          find . -type f \( -name 'build/**/*.bin' -o -name 'build/**/*.hex' -o -name 'build/**/*.elf'\) -exec cp {} release-assets-pub/ \;
+          mv -f release-assets-pub/AARTG* release-assets-pri/
+          cp -rf release-assets-pub/BOOT* release-assets-pri/
+          ls -la release-assets-pri
+          ls -la release-assets-pub
 
       - uses: actions/upload-artifact@v4
         with:
@@ -63,13 +67,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: firmware-${{ needs.build.outputs.version }}
-          path: release-assets
+          path: release-assets-pri
 
       - name: Create private release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
-          gh release create "v${{ needs.build.outputs.version }}" release-assets/* \
+          gh release create "v${{ needs.build.outputs.version }}" release-assets-pri/* \
             --repo "$PRIVATE_REPO" \
             --title "Firmware ${{ needs.build.outputs.version }}" \
             --notes "Automated build from ${{ github.repository }}@${{ github.sha }}"
@@ -85,13 +89,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: firmware-${{ needs.build.outputs.version }}
-          path: release-assets
+          path: release-assets-pub
 
       - name: Create public release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
-          gh release create "v${{ needs.build.outputs.version }}" release-assets/* \
+          gh release create "v${{ needs.build.outputs.version }}" release-assets-pub/* \
             --repo "$PUBLIC_REPO" \
             --title "Firmware ${{ needs.build.outputs.version }}" \
             --notes "Release ${{ needs.build.outputs.version }}"

@@ -76,7 +76,6 @@ void iotim2_isr(void) {
 #else
 	int x = TIM_CCR2(IOTIM2);
 #endif
-	if (x < 800 || x > 2200) return; // Invalid signal
 	setbrake(x);
 }
 #endif
@@ -224,6 +223,7 @@ static void entryirq(void) {
 #endif
 	if (TIM_PSC(IOTIM)) {
 		if (t > 2000) { // Servo/Oneshot125
+			if (n < 8) return;
 			ioirq = calibirq;
 			TIM_DIER(IOTIM) = TIM_DIER_CC1IE;
 			TIM_CR1(IOTIM) = TIM_CR1_CEN;
@@ -293,7 +293,10 @@ static void servoirq(void) {
 		telreq = 1;
 		return;
 	}
-	if (x < 800 || x > 2200) return; // Invalid signal
+	if (x < 800 || x > 2200) { // Invalid signal
+		if (ertm) return;
+		WWDG_CR = WWDG_CR_WDGA;
+	}
 	IWDG_KR = IWDG_KR_RESET;
 	setthrot(x);
 }

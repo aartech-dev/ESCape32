@@ -1,0 +1,57 @@
+name: Attach Firmware to Tagged Release
+
+# Mirrors upstream's convention of attaching built binaries directly to
+# each tagged GitHub release on this repo. This is separate from
+# release.yml, which publishes firmware to the remora-firmware repo on
+# push to main / manual dispatch.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  BUILDER_IMAGE: ghcr.io/aartech-dev/escape32-builder:latest
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  build-and-attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull builder image
+        run: docker pull "$BUILDER_IMAGE"
+
+      - name: Build firmware
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/workspace" "$BUILDER_IMAGE" \
+            bash -c 'cmake -B build -D LIBOPENCM3_DIR="$LIBOPENCM3_DIR" && make -C build'
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p release-assets
+          find build -type f \( -name '*.bin' -o -name '*.hex' -o -name '*.elf' \) -exec cp {} release-assets/ \;
+          # AARTG stays private: never attach it to a public GitHub release.
+          rm -f release-assets/AARTG*
+          ls -la release-assets
+
+      - name: Attach binaries to the tag's release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+            gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" \
+              --title "${{ github.ref_name }}" --generate-notes
+          gh release upload "${{ github.ref_name }}" release-assets/* \
+            --repo "${{ github.repository }}" --clobber

@@ -40,25 +40,30 @@ jobs:
 
       - name: Build firmware
         run: |
-          docker run --rm -v "${{ github.workspace }}:/workspace" "$BUILDER_IMAGE" make
+          docker run --rm -v "${{ github.workspace }}:/workspace" "$BUILDER_IMAGE" \
+            bash -c 'cmake -B build -D LIBOPENCM3_DIR="$LIBOPENCM3_DIR" && make -C build'
 
       - name: Collect artifacts
         run: |
           mkdir -p release-assets-pri
           mkdir -p release-assets-pub
-          # EDIT ME: this glob assumes your Makefile leaves .bin/.hex somewhere
-          # under the repo (mirrors upstream's build/**/*.bin layout). Adjust
-          # to match wherever YOUR Makefile actually puts output.
-          find . -type f \( -name 'build/**/*.bin' -o -name 'build/**/*.hex' -o -name 'build/**/*.elf'\) -exec cp {} release-assets-pub/ \;
+          find build -type f \( -name '*.bin' -o -name '*.hex' -o -name '*.elf' \) -exec cp {} release-assets-pub/ \;
           mv -f release-assets-pub/AARTG* release-assets-pri/
           cp -rf release-assets-pub/BOOT* release-assets-pri/
           ls -la release-assets-pri
           ls -la release-assets-pub
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload private artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ steps.version.outputs.version }}
-          path: release-assets/*
+          name: firmware-pri-${{ steps.version.outputs.version }}
+          path: release-assets-pri/*
+
+      - name: Upload public artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-pub-${{ steps.version.outputs.version }}
+          path: release-assets-pub/*
 
   publish-private:
     needs: build
@@ -66,7 +71,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: firmware-${{ needs.build.outputs.version }}
+          name: firmware-pri-${{ needs.build.outputs.version }}
           path: release-assets-pri
 
       - name: Create private release
@@ -88,7 +93,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: firmware-${{ needs.build.outputs.version }}
+          name: firmware-pub-${{ needs.build.outputs.version }}
           path: release-assets-pub
 
       - name: Create public release

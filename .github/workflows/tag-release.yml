@@ -42,8 +42,8 @@ jobs:
         run: |
           mkdir -p release-assets
           find build -type f \( -name '*.bin' -o -name '*.hex' -o -name '*.elf' \) -exec cp {} release-assets/ \;
-          # AARTG stays private: never attach it to a public GitHub release.
-          rm -f release-assets/AARTG*
+          # AARTG and NSR stay private: never attach them to this repo's public GitHub release.
+          rm -f release-assets/AARTG* release-assets/AART3NSR*
           ls -la release-assets
 
       - name: Attach binaries to the tag's release

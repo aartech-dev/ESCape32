@@ -8,7 +8,8 @@ on:
 env:
   # EDIT ME: must match the tag pushed by build-image.yml (same OWNER, lowercase)
   BUILDER_IMAGE: ghcr.io/aartech-dev/escape32-builder:latest
-  # EDIT ME: your public release repo, as owner/name
+  # EDIT ME: your two release repos, as owner/name
+  PRIVATE_REPO: aartech-dev/remora-firmware-internal
   PUBLIC_REPO: aartech-dev/remora-firmware
 
 permissions:
@@ -44,17 +45,44 @@ jobs:
 
       - name: Collect artifacts
         run: |
-          mkdir -p release-assets-pub
+          mkdir -p release-assets-pri release-assets-pub
           find build -type f \( -name '*.bin' -o -name '*.hex' -o -name '*.elf' \) -exec cp {} release-assets-pub/ \;
           # AARTG stays private: keep it out of the public release entirely.
           rm -f release-assets-pub/AARTG*
+          # NSR binaries go to the private release repo, not the public one.
+          mv -f release-assets-pub/AART3NSR* release-assets-pri/
+          ls -la release-assets-pri
           ls -la release-assets-pub
+
+      - name: Upload private artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-pri-${{ steps.version.outputs.version }}
+          path: release-assets-pri/*
 
       - name: Upload public artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firmware-pub-${{ steps.version.outputs.version }}
           path: release-assets-pub/*
+
+  publish-private:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-pri-${{ needs.build.outputs.version }}
+          path: release-assets-pri
+
+      - name: Create private release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          gh release create "v${{ needs.build.outputs.version }}" release-assets-pri/* \
+            --repo "$PRIVATE_REPO" \
+            --title "Firmware ${{ needs.build.outputs.version }}" \
+            --notes "Automated build from ${{ github.repository }}@${{ github.sha }}"
 
   publish-public:
     needs: build
